@@ -9,14 +9,14 @@ dataSet = pd.read_csv('./Database_And_Test_Instances_Feedback_System/3.TrainingT
 X = dataSet[['Delivery_Norm', 'Shipping_Norm', 'Damage_rate_Norm', 'Population_Norm', 'Employment_Norm', 'Salary_Norm']].values
 y = dataSet['Pnum'].values
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, random_state = 3)
+X_train, X_test, y_train, y_test = train_test_split(X, y, random_state = 7)
 
 mlp = MLPRegressor(
   hidden_layer_sizes = (16, 16),
   activation = 'relu',
   solver = 'lbfgs',
   learning_rate = 'constant',
-  max_iter = 200,
+  max_iter = 10000,
   random_state = 3,
   n_iter_no_change = 10,
   max_fun = 15000
