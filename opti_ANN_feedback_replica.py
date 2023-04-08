@@ -61,6 +61,9 @@ for problemSize in problemSizes:
   primaryFacilitiesCoordinates = facilityDataSet[['Latitude', 'Longitude']].values[0:secondaryFacilitiesIndex].astype(float)
   secondaryFacilitiesCoordinates = facilityDataSet[['Latitude', 'Longitude']].values[secondaryFacilitiesIndex+1:].astype(float)
 
+  alphai = facilityDataSet['Capacity'].values[0:secondaryFacilitiesIndex].astype(int)
+  betaj = facilityDataSet['Capacity'].values[secondaryFacilitiesIndex + 1:].astype(int)
+
   deltasi = haversine.haversine_vector(primaryFacilitiesCoordinates, supplierCoordinates, unit = 'mi', comb = True).tolist()
   deltaij = haversine.haversine_vector(secondaryFacilitiesCoordinates, primaryFacilitiesCoordinates, unit = 'mi', comb = True).tolist()
   deltaiip = haversine.haversine_vector(primaryFacilitiesCoordinates, primaryFacilitiesCoordinates, unit = 'mi', comb = True).tolist()
@@ -95,7 +98,7 @@ for problemSize in problemSizes:
 
     objectiveResults = []
     demands = []
-    while abs(previousResult - currentResult) > epsilon and iterationCount <= 12:
+    while abs(previousResult - currentResult) > epsilon and iterationCount <= 8:
       model = ConcreteModel()
 
       model.gip = Var(VP, domain = Binary)
@@ -111,18 +114,14 @@ for problemSize in problemSizes:
       model.constraints.add(sum(model.gjq[j] for j in VQ) <= rQ)
 
       for i in VP:
-        model.constraints.add(sum(model.xsi[s, i] for s in S) <= sum(dK[k]*model.gip[i] for k in K))
-        model.constraints.add(sum(model.yij[i, j] for j in VQ) <= sum(dK[k]*model.gip[i] for k in K))
-        model.constraints.add(sum(model.tiip[i, ip] for ip in VP if i != ip) <= sum(dK[k]*model.gip[i] for k in K))
+        model.constraints.add(sum(model.xsi[s, i] for s in S) + sum(model.tiip[ip, i] for ip in VP if i != ip) <= alphai[i]*model.gip[i])
+        model.constraints.add(sum(model.yij[i, j] for j in VQ) + sum(model.tiip[i, ip] for ip in VP if i != ip) <= alphai[i]*model.gip[i])
         model.constraints.add(sum(model.xsi[s, i] for s in S) + sum(model.tiip[ip, i] for ip in VP if i != ip) >= sum(model.yij[i, j] for j in VQ) + sum(model.tiip[i, ip] for ip in VP if i != ip))
         model.constraints.add(sum(model.tiip[ip, i] for ip in VP if i != ip) >= l*sum(model.yij[i, j] for j in VQ))
 
-      for ip in VP:
-        model.constraints.add(sum(model.tiip[i, ip] for i in VP if i != ip) <= sum(dK[k]*model.gip[ip] for k in K))
-
       for j in VQ:
-        model.constraints.add(sum(model.yij[i, j] for i in VP) <= sum(dK[k]*model.gjq[j] for k in K))
-        model.constraints.add(sum(model.zjk[j, k] for k in K) <= sum(dK[k]*model.gjq[j] for k in K))
+        model.constraints.add(sum(model.yij[i, j] for i in VP) <= betaj[j]*model.gjq[j])
+        model.constraints.add(sum(model.zjk[j, k] for k in K) <= betaj[j]*model.gjq[j])
         model.constraints.add(sum(model.yij[i, j] for i in VP) >= sum(model.zjk[j, k] for k in K))
 
       for k in K:
@@ -134,7 +133,7 @@ for problemSize in problemSizes:
       )
 
       solver = SolverFactory('cplex')
-      solver.options['lpmethod'] = 3
+      #solver.options['lpmethod'] = 3
       #solver.options['timelimit'] = 7200
 
       results = solver.solve(model, logfile = f"Log_set_VP_{problemSize[1]}_VQ_{problemSize[2]}_rP_{rP}_rQ_{rQ}_l_{l}_{iterationCount}.log")
