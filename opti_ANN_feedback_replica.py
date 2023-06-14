@@ -31,6 +31,8 @@ CS = 0.0006
 CP = 0.0024
 CK = 0.012
 
+PK = 10
+
 supplierCoordinates = np.array([30.178336, 120.190069])
 
 clientDataSet = pd.read_csv('./Database_And_Test_Instances_Feedback_System/1.Demand_Distribution.csv')
@@ -60,9 +62,6 @@ for problemSize in problemSizes:
 
   primaryFacilitiesCoordinates = facilityDataSet[['Latitude', 'Longitude']].values[0:secondaryFacilitiesIndex].astype(float)
   secondaryFacilitiesCoordinates = facilityDataSet[['Latitude', 'Longitude']].values[secondaryFacilitiesIndex+1:].astype(float)
-
-  alphai = facilityDataSet['Capacity'].values[0:secondaryFacilitiesIndex].astype(int)
-  betaj = facilityDataSet['Capacity'].values[secondaryFacilitiesIndex + 1:].astype(int)
 
   deltasi = haversine.haversine_vector(primaryFacilitiesCoordinates, supplierCoordinates, unit = 'mi', comb = True).tolist()
   deltaij = haversine.haversine_vector(secondaryFacilitiesCoordinates, primaryFacilitiesCoordinates, unit = 'mi', comb = True).tolist()
@@ -114,22 +113,23 @@ for problemSize in problemSizes:
       model.constraints.add(sum(model.gjq[j] for j in VQ) <= rQ)
 
       for i in VP:
-        model.constraints.add(sum(model.xsi[s, i] for s in S) + sum(model.tiip[ip, i] for ip in VP if i != ip) <= alphai[i]*model.gip[i])
-        model.constraints.add(sum(model.yij[i, j] for j in VQ) + sum(model.tiip[i, ip] for ip in VP if i != ip) <= alphai[i]*model.gip[i])
+        model.constraints.add(sum(model.xsi[s, i] for s in S) <= sum(dK[k]*model.gip[i] for k in K))
+        model.constraints.add(sum(model.yij[i, j] for j in VQ) <= sum(dK[k]*model.gip[i] for k in K))
+        model.constraints.add(sum(model.tiip[i, ip] for ip in VP if i != ip) <= sum(dK[k]*model.gip[i] for k in K))
         model.constraints.add(sum(model.xsi[s, i] for s in S) + sum(model.tiip[ip, i] for ip in VP if i != ip) >= sum(model.yij[i, j] for j in VQ) + sum(model.tiip[i, ip] for ip in VP if i != ip))
         model.constraints.add(sum(model.tiip[ip, i] for ip in VP if i != ip) >= l*sum(model.yij[i, j] for j in VQ))
 
       for j in VQ:
-        model.constraints.add(sum(model.yij[i, j] for i in VP) <= betaj[j]*model.gjq[j])
-        model.constraints.add(sum(model.zjk[j, k] for k in K) <= betaj[j]*model.gjq[j])
+        model.constraints.add(sum(model.yij[i, j] for i in VP) <= sum(dK[k]*model.gjq[j] for k in K))
+        model.constraints.add(sum(model.zjk[j, k] for k in K) <= sum(dK[k]*model.gjq[j] for k in K))
         model.constraints.add(sum(model.yij[i, j] for i in VP) >= sum(model.zjk[j, k] for k in K))
 
       for k in K:
-        model.constraints.add(sum(model.zjk[j, k] for j in VQ) >= dK[k])
+        model.constraints.add(sum(model.zjk[j, k] for j in VQ) <= dK[k])
 
       model.objective = Objective(
-        expr = sum(sum(CS*deltasi[s][i]*model.xsi[s, i] for i in VP) for s in S) + sum(sum(CP*deltaij[i][j]*model.yij[i, j] for j in VQ) for i in VP) + sum(sum(CP*deltaiip[i][ip]*model.tiip[i, ip] for ip in VP if i != ip) for i in VP) + sum(sum(CK*deltajk[j][k]*model.zjk[j, k] for k in K) for j in VQ) + sum(ettaiP[i]*model.gip[i] for i in VP) + sum(ettajQ[j]*model.gjq[j] for j in VQ) + sum(gammaiP[i] * (sum(model.yij[i, j] for j in VQ) + sum(model.tiip[i, ip] for ip in VP if i != ip)) for i in VP) + sum(gammajQ[j] * sum(model.zjk[j, k] for k in K) for j in VQ),
-        sense = minimize
+        expr = sum(sum(PK*model.zjk[j, k] for j in VQ) for k in K) - sum(sum(CS*deltasi[s][i]*model.xsi[s, i] for i in VP) for s in S) - sum(sum(CP*deltaij[i][j]*model.yij[i, j] for j in VQ) for i in VP) - sum(sum(CP*deltaiip[i][ip]*model.tiip[i, ip] for ip in VP if i != ip) for i in VP) - sum(sum(CK*deltajk[j][k]*model.zjk[j, k] for k in K) for j in VQ) - sum(ettaiP[i]*model.gip[i] for i in VP) - sum(ettajQ[j]*model.gjq[j] for j in VQ) - sum(gammaiP[i] * (sum(model.yij[i, j] for j in VQ) - sum(model.tiip[i, ip] for ip in VP if i != ip)) for i in VP) - sum(gammajQ[j] * sum(model.zjk[j, k] for k in K) for j in VQ),
+        sense = maximize
       )
 
       solver = SolverFactory('cplex')
@@ -154,6 +154,13 @@ for problemSize in problemSizes:
       objectiveResults.append(currentResult)
 
       iterationCount+=1
+
+    with open('Demand_and_results_capacitated_model.txt', 'a') as file:
+      file.write("------------------------------------------------------------------\n")
+      file.write(f"Set_VP_{problemSize[1]}_VQ_{problemSize[2]}_rP_{rP}_rQ_{rQ}_l_{l}\n\n")
+      file.write(f"Objective results: {objectiveResults}\n")
+      file.write(f"Demands: {demands}\n")
+      file.write("------------------------------------------------------------------\n\n")
 
     print("------------------------------------------------------------------")
     print(f"Set_VP_{problemSize[1]}_VQ_{problemSize[2]}_rP_{rP}_rQ_{rQ}_l_{l}")
